@@ -3,17 +3,23 @@ import { X as XIcon, Heart, UserX, X } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import type { Profile } from '../types/models';
 
+import { MatchCelebrationModal } from './MatchCelebrationModal';
+import { AnimatePresence } from 'framer-motion';
+
 interface NotificationsPanelProps {
   currentUser: { id: string; username: string };
   onClose: () => void;
+  onNavigateToMatches: () => void;
 }
 
 export function NotificationsPanel({
   currentUser,
   onClose,
+  onNavigateToMatches
 }: NotificationsPanelProps) {
   const [incomingProfiles, setIncomingProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     loadIncomingLikes();
@@ -32,8 +38,11 @@ export function NotificationsPanel({
     setIsLoading(false);
   };
 
-  const handleLikeBack = async (targetId: string) => {
-    await StorageService.addLike(currentUser.id, targetId);
+  const handleLikeBack = async (targetId: string, targetProfile: Profile) => {
+    const isMatch = await StorageService.addLike(currentUser.id, targetId);
+    if (isMatch) {
+      setMatchedProfile(targetProfile);
+    }
     setIncomingProfiles((prev) => prev.filter((p) => p.id !== targetId));
   };
 
@@ -97,7 +106,7 @@ export function NotificationsPanel({
                 </div>
                 <div className="flex flex-col gap-2 shrink-0">
                   <button
-                    onClick={() => handleLikeBack(profile.id)}
+                    onClick={() => handleLikeBack(profile.id, profile)}
                     className="w-8 h-8 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-500 flex items-center justify-center transition-colors"
                   >
                     <Heart size={16} className="fill-current" />
@@ -114,6 +123,23 @@ export function NotificationsPanel({
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {matchedProfile && (
+          <MatchCelebrationModal
+            currentUser={currentUser}
+            matchedProfile={matchedProfile}
+            onClose={() => {
+              setMatchedProfile(null);
+            }}
+            onSendMessage={() => {
+              setMatchedProfile(null);
+              onClose();
+              onNavigateToMatches();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

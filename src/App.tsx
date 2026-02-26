@@ -253,6 +253,10 @@ export default function App() {
                 setShowNotifications(false);
                 checkIncomingLikes(); // Refresh badge on close
               }}
+              onNavigateToMatches={() => {
+                setShowNotifications(false);
+                setActiveTab('matches');
+              }}
             />
           )}
 
