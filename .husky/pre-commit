@@ -1,0 +1,6 @@
+
+echo "Running Prettier and ESLint on staged files..."
+npx lint-staged
+
+echo "Running TypeScript compiler check..."
+npx tsc --noEmit

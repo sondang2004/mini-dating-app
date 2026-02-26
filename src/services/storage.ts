@@ -1,105 +1,235 @@
-import type { Profile, Match, Availability } from '../types/models';
+import type { Profile, Match, Availability, Message } from '../types/models';
 
-const STORAGE_KEYS = {
-    PROFILES: 'mini_dating_profiles',
-    LIKES: 'mini_dating_likes', // Record<email, string[]> lists of liked emails
-    MATCHES: 'mini_dating_matches',
-    AVAILABILITIES: 'mini_dating_availabilities',
-    CURRENT_USER: 'mini_dating_current_user',
+const PREFIXES = {
+  PROFILES: 'mini-dating-global-profile-',
+  LIKES: 'mini-dating-global-likes-',
+  PASSES: 'mini-dating-global-passes-',
+  MATCHES: 'mini-dating-global-match-',
+  AVAILABILITIES: 'mini-dating-global-availability-',
+  MESSAGES: 'mini-dating-global-messages-',
+  ACCOUNTS: 'mini-dating-global-account-',
 };
 
+const SESSION_KEY = 'mini-dating-active-user-id';
+
 export const StorageService = {
-    // --- Profiles ---
-    getProfiles(): Profile[] {
-        const data = localStorage.getItem(STORAGE_KEYS.PROFILES);
-        return data ? JSON.parse(data) : [];
-    },
-    saveProfile(profile: Profile): void {
-        const profiles = this.getProfiles();
-        const existingIndex = profiles.findIndex(p => p.email === profile.email);
-        if (existingIndex >= 0) {
-            profiles[existingIndex] = profile;
-        } else {
-            profiles.push(profile);
-        }
-        localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(profiles));
-    },
-    getProfile(email: string): Profile | undefined {
-        return this.getProfiles().find(p => p.email === email);
-    },
-
-    // --- Current User ---
-    getCurrentUserEmail(): string | null {
-        return localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    },
-    setCurrentUserEmail(email: string): void {
-        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, email);
-    },
-    clearCurrentUserEmail(): void {
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    },
-
-    // --- Likes & Matches ---
-    getLikes(email: string): string[] {
-        const data = localStorage.getItem(STORAGE_KEYS.LIKES);
-        const allLikes: Record<string, string[]> = data ? JSON.parse(data) : {};
-        return allLikes[email] || [];
-    },
-    addLike(fromEmail: string, toEmail: string): boolean {
-        const data = localStorage.getItem(STORAGE_KEYS.LIKES);
-        const allLikes: Record<string, string[]> = data ? JSON.parse(data) : {};
-
-        if (!allLikes[fromEmail]) {
-            allLikes[fromEmail] = [];
-        }
-
-        if (!allLikes[fromEmail].includes(toEmail)) {
-            allLikes[fromEmail].push(toEmail);
-            localStorage.setItem(STORAGE_KEYS.LIKES, JSON.stringify(allLikes));
-        }
-
-        // Check for mutual match
-        const toLikes = allLikes[toEmail] || [];
-        if (toLikes.includes(fromEmail)) {
-            this.createMatch(fromEmail, toEmail);
-            return true; // Match created
-        }
-        return false;
-    },
-
-    getMatches(): Match[] {
-        const data = localStorage.getItem(STORAGE_KEYS.MATCHES);
-        return data ? JSON.parse(data) : [];
-    },
-    createMatch(email1: string, email2: string): void {
-        const matches = this.getMatches();
-        // Prevent duplicate matches
-        const exists = matches.some(
-            m => (m.user1Email === email1 && m.user2Email === email2) ||
-                (m.user1Email === email2 && m.user2Email === email1)
-        );
-        if (!exists) {
-            matches.push({ user1Email: email1, user2Email: email2, createdAt: Date.now() });
-            localStorage.setItem(STORAGE_KEYS.MATCHES, JSON.stringify(matches));
-        }
-    },
-
-    // --- Availability ---
-    getAvailabilities(): Availability[] {
-        const data = localStorage.getItem(STORAGE_KEYS.AVAILABILITIES);
-        return data ? JSON.parse(data) : [];
-    },
-    getAvailability(email: string): Availability | undefined {
-        return this.getAvailabilities().find(a => a.email === email);
-    },
-    saveAvailability(availability: Availability): void {
-        const availabilities = this.getAvailabilities();
-        const existingIndex = availabilities.findIndex(a => a.email === availability.email);
-        if (existingIndex >= 0) {
-            availabilities[existingIndex] = availability;
-        } else {
-            availabilities.push(availability);
-        }
-        localStorage.setItem(STORAGE_KEYS.AVAILABILITIES, JSON.stringify(availabilities));
+  async getCurrentUser(): Promise<{ id: string; username: string } | null> {
+    const activeUserId = localStorage.getItem(SESSION_KEY);
+    if (activeUserId) {
+      const profile = await this.getProfile(activeUserId);
+      return { id: activeUserId, username: profile?.name || activeUserId };
     }
+    return null;
+  },
+
+  // For local mock login switcher
+  async setCurrentUser(userId: string): Promise<void> {
+    localStorage.setItem(SESSION_KEY, userId);
+  },
+
+  async registerAccount(
+    username: string,
+    passwordHash: string
+  ): Promise<{ id: string; username: string }> {
+    // Simple mock check
+    const id = crypto.randomUUID();
+    const accountData = { id, username, password: passwordHash };
+    await this._set(`${PREFIXES.ACCOUNTS}${username}`, accountData);
+    await this.setCurrentUser(id);
+    return { id, username };
+  },
+
+  async loginAccount(
+    username: string,
+    passwordHash: string
+  ): Promise<{ id: string; username: string } | null> {
+    const account = await this._get<{
+      id: string;
+      username: string;
+      password: string;
+    } | null>(`${PREFIXES.ACCOUNTS}${username}`, null);
+    if (account && account.password === passwordHash) {
+      await this.setCurrentUser(account.id);
+      return { id: account.id, username: account.username };
+    }
+    return null; // Invalid credentials
+  },
+
+  async signOut(): Promise<void> {
+    localStorage.removeItem(SESSION_KEY);
+  },
+
+  async _get<T>(key: string, defaultValue: T): Promise<T> {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : defaultValue;
+    } catch (e) {
+      console.error(`Error reading ${key}`, e);
+      return defaultValue;
+    }
+  },
+  async _set<T>(key: string, value: T): Promise<void> {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.error(`Error writing ${key}`, e);
+      // Could alert about quota limits here
+    }
+  },
+  async _listData<T>(prefixPattern: string): Promise<T[]> {
+    try {
+      // Remove the '*' from the end if present for startsWith matching
+      const prefix = prefixPattern.endsWith('*')
+        ? prefixPattern.slice(0, -1)
+        : prefixPattern;
+      const results: T[] = [];
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const rawData = localStorage.getItem(key);
+          if (rawData) {
+            try {
+              results.push(JSON.parse(rawData) as T);
+            } catch (e) {
+              console.error(`Failed to parse item for key ${key}`);
+            }
+          }
+        }
+      }
+      return results;
+    } catch (e) {
+      console.error(`Error listing prefix ${prefixPattern}`, e);
+      return [];
+    }
+  },
+
+  // --- Profiles ---
+  async getProfiles(): Promise<Profile[]> {
+    return this._listData<Profile>(`${PREFIXES.PROFILES}*`);
+  },
+  async saveProfile(profile: Profile): Promise<void> {
+    await this._set(`${PREFIXES.PROFILES}${profile.id}`, profile);
+  },
+  async getProfile(id: string): Promise<Profile | undefined> {
+    return this._get<Profile | undefined>(
+      `${PREFIXES.PROFILES}${id}`,
+      undefined
+    );
+  },
+
+  // --- Likes ---
+  async getLikes(userId: string): Promise<string[]> {
+    return this._get<string[]>(`${PREFIXES.LIKES}${userId}`, []);
+  },
+  async addLike(fromId: string, toId: string): Promise<boolean> {
+    const myLikes = await this.getLikes(fromId);
+    if (!myLikes.includes(toId)) {
+      myLikes.push(toId);
+      await this._set(`${PREFIXES.LIKES}${fromId}`, myLikes);
+    }
+
+    // Check for mutual match
+    const theirLikes = await this.getLikes(toId);
+    if (theirLikes.includes(fromId)) {
+      await this.createMatch(fromId, toId);
+      return true;
+    }
+    return false;
+  },
+  async getIncomingLikes(userId: string): Promise<string[]> {
+    try {
+      const prefix = PREFIXES.LIKES;
+      const incoming: string[] = [];
+
+      // Scan all likes keys manually
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const likerId = key.replace(prefix, '');
+          const rawData = localStorage.getItem(key);
+          if (rawData) {
+            try {
+              const likedIds = JSON.parse(rawData);
+              if (Array.isArray(likedIds) && likedIds.includes(userId)) {
+                incoming.push(likerId);
+              }
+            } catch {}
+          }
+        }
+      }
+
+      const ourLikes = await this.getLikes(userId);
+      const ourPasses = await this.getPasses(userId);
+
+      return incoming.filter(
+        (fromId) => !ourLikes.includes(fromId) && !ourPasses.includes(fromId)
+      );
+    } catch (e) {
+      console.error(`Error getting incoming likes for ${userId}`, e);
+      return [];
+    }
+  },
+
+  // --- Passes ---
+  async getPasses(userId: string): Promise<string[]> {
+    return this._get<string[]>(`${PREFIXES.PASSES}${userId}`, []);
+  },
+  async addPass(fromId: string, toId: string): Promise<void> {
+    const myPasses = await this.getPasses(fromId);
+    if (!myPasses.includes(toId)) {
+      myPasses.push(toId);
+      await this._set(`${PREFIXES.PASSES}${fromId}`, myPasses);
+    }
+  },
+
+  // --- Matches ---
+  async getMatches(): Promise<Match[]> {
+    return this._listData<Match>(`${PREFIXES.MATCHES}*`);
+  },
+  async createMatch(id1: string, id2: string): Promise<void> {
+    const [a, b] = [id1, id2].sort();
+    const matchKey = `${PREFIXES.MATCHES}${a}-${b}`;
+    const existing = await this._get<Match | null>(matchKey, null);
+    if (!existing) {
+      await this._set(matchKey, {
+        user1Id: id1,
+        user2Id: id2,
+        createdAt: Date.now(),
+      });
+    }
+  },
+
+  // --- Availability ---
+  async getAvailabilities(): Promise<Availability[]> {
+    return this._listData<Availability>(`${PREFIXES.AVAILABILITIES}*`);
+  },
+  async getAvailability(userId: string): Promise<Availability | undefined> {
+    return this._get<Availability | undefined>(
+      `${PREFIXES.AVAILABILITIES}${userId}`,
+      undefined
+    );
+  },
+  async saveAvailability(availability: Availability): Promise<void> {
+    await this._set(
+      `${PREFIXES.AVAILABILITIES}${availability.userId}`,
+      availability
+    );
+  },
+
+  // --- Messages ---
+  async getAllMessages(): Promise<Message[]> {
+    return this._listData<Message>(`${PREFIXES.MESSAGES}*`);
+  },
+  async getMessages(user1Id: string, user2Id: string): Promise<Message[]> {
+    const [a, b] = [user1Id, user2Id].sort();
+    const convoPrefix = `${PREFIXES.MESSAGES}${a}-${b}-`;
+    const msgs = await this._listData<Message>(`${convoPrefix}*`);
+    return msgs.sort((m1, m2) => m1.timestamp - m2.timestamp);
+  },
+  async addMessage(message: Message): Promise<void> {
+    const [a, b] = [message.senderId, message.receiverId].sort();
+    const msgKey = `${PREFIXES.MESSAGES}${a}-${b}-${message.id || Date.now()}`;
+    await this._set(msgKey, message);
+  },
 };
