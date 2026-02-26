@@ -1,6 +1,7 @@
 # MiMi - Modern Dating App
 
 A premium, modern dating application built with a focus on UI/UX, smooth animations, and interactive date coordination.
+you can view pronect at: https://mimid.vercel.app/
 
 ## System Organization
 
