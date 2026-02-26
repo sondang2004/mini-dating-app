@@ -125,6 +125,7 @@ export function CreateProfile({
           smoking: formData.smoking,
           prompt1: formData.prompt1,
           prompt2: formData.prompt2,
+          createdAt: existingProfile?.createdAt || Date.now(),
         };
 
         await StorageService.saveProfile(profile);
@@ -168,13 +169,12 @@ export function CreateProfile({
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step
+              className={`h-1.5 rounded-full transition-all duration-300 ${i === step
                   ? 'w-8 bg-white'
                   : i < step
                     ? 'w-4 bg-white/60'
                     : 'w-4 bg-white/30'
-              }`}
+                }`}
             />
           ))}
         </div>
@@ -185,9 +185,9 @@ export function CreateProfile({
           step === 5
             ? handleSubmit
             : (e) => {
-                e.preventDefault();
-                handleNext();
-              }
+              e.preventDefault();
+              handleNext();
+            }
         }
         className="p-8 space-y-6"
       >

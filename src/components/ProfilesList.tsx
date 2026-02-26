@@ -43,6 +43,9 @@ export function ProfilesList({
             !userPasses.has(p.id)
         );
 
+        // Sort descending by createdAt so newest users appear first
+        unseenProfiles.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
         setProfiles(unseenProfiles);
       } catch (error) {
         console.error('Error fetching profiles:', error);
@@ -289,7 +292,7 @@ function SwipeableCard({ profile, isTop, index, onSwipe }: SwipeableCardProps) {
             <ProfileDetails
               profile={profile}
               onClose={() =>
-                toggleExpand({ stopPropagation: () => {} } as React.MouseEvent)
+                toggleExpand({ stopPropagation: () => { } } as React.MouseEvent)
               }
             />
           </motion.div>

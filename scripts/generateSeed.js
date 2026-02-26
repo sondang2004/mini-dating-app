@@ -53,7 +53,8 @@ for (let i = 0; i < 50; i++) {
             answer:
                 'Sleeping in until noon and then ' + faker.company.catchPhrase(),
         },
-        avatarUrl
+        avatarUrl,
+        createdAt: faker.date.past().getTime()
     };
     profiles.push(profile);
 }

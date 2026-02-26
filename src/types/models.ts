@@ -18,6 +18,7 @@ export interface Profile {
   smoking?: string;
   prompt1?: { question: string; answer: string };
   prompt2?: { question: string; answer: string };
+  createdAt?: number;
 }
 
 export interface Match {
