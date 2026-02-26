@@ -19,6 +19,8 @@ import { StorageService } from './services/storage';
 import { Flame, MessageCircle, User, Bell, LogOut } from 'lucide-react';
 import type { Profile } from './types/models';
 
+import seedProfilesData from './data/seedProfiles.json';
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<{
     id: string;
@@ -53,6 +55,14 @@ export default function App() {
   const checkAuthStatus = async () => {
     setIsLoading(true);
     try {
+      // Auto-inject clone seed profiles if the database is empty
+      const existingProfiles = await StorageService.getProfiles();
+      if (existingProfiles.length === 0) {
+        console.log("Empty database detected. Generating 50 clone accounts...");
+        const promises = seedProfilesData.map(p => StorageService.saveProfile(p as Profile));
+        await Promise.all(promises);
+      }
+
       const user = await StorageService.getCurrentUser();
 
       if (user) {
